@@ -1,0 +1,4 @@
+/www.*.*
+/.vscode
+/www.tinyos.net
+/__pycache__
