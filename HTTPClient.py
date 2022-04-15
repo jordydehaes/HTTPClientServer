@@ -140,6 +140,12 @@ class HTTPClient:
         return response
 
 
+    """
+    Looks for the charset in the response, more specifically in the HTTP header.
+
+    @param response: The encoded response from the server.
+    @return: The Content-Type charset to decode the response with.
+    """
     def findContentType(self, response):
         charset = ""
         if response.find(b"Content-Type:"):
