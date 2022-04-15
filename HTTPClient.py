@@ -67,7 +67,8 @@ class HTTPClient:
         print(f"[RETRIEVING HTML] GET / HTTP/1.1")
         self.encodeAndSend(request) # Send request to server.
         response = self.rvcChunks() # Read the server reply & store it in 'response'.
-        self.bodyToString(response) # Pass the byte response to bodyToString
+        charset = self.findContentType(response)
+        self.bodyToString(response, charset) # Pass the byte response to bodyToString
         images = self.scrapeImages()
         if images:
             print(f"[IMAGES FOUND] {images [0:2]}...")
@@ -83,11 +84,13 @@ class HTTPClient:
         print(f"[RETRIEVING HTML] HEAD / HTTP/1.1")
         self.encodeAndSend(request)
         response = self.s.recv(1024)
-        decodedResponse = response.decode('utf-8', errors='ignore')
+        charset = self.findContentType(response)
         try:
+            decodedResponse = response.decode(charset)
             self.writeHTML(decodedResponse, "headers.txt")
-        except FileNotFoundError as e:
-             print(f"{e}")
+        except LookupError:
+            decodedResponse = response.decode('utf-8', errors='ignore')
+            self.writeHTML(decodedResponse, "headers.txt")
 
 
 
@@ -122,7 +125,7 @@ class HTTPClient:
             if data.find(b"Content-Length:") != -1:
                 startPos = data.find(b"Content-Length") # Start position in byte stream where "Content-Length" is found.
                 findData = data[startPos:] # Returns the data from the start position in byte stream.
-                endPos = findData.find(b"\r\n") # Finds the first occurence of "\r\n" in the byte stream and saves it position.
+                endPos = findData.find(b"\r\n") # Finds the first occurence of "\r\n" in the byte stream after content length and save its position.
                 contentLength = findData[16:endPos].decode() # Gets the content length bytes and decodes it to discover the total content contentLength of HTTP request.
 
             if data.find(b"\r\n\r\n") != -1:
@@ -131,10 +134,20 @@ class HTTPClient:
             response += data
 
             if endOfLineCounter >= 2 or totalLength >= int(contentLength): 
-                # If second EOL is found, break. (chunked encoding)
+                # If second EOL/CRLF (line break) is found, break. (chunked encoding ends with a CRLF)
                 # If total received bytes from buffer exceeds or equals (should exceed because of additional bytes fomre the header ietself) actual content length -> break (content-lentgh).
                 break
         return response
+
+
+    def findContentType(self, response):
+        charset = ""
+        if response.find(b"Content-Type:"):
+            startPos = response.find(b"charset=")
+            findData = response[startPos:]
+            endPos = findData.find(b"\r\n")
+            charset = findData[8:endPos].decode()
+        return charset
 
 
     """
@@ -157,13 +170,14 @@ class HTTPClient:
 
     @param response: The byte response from the HTTP request.
     """
-    def bodyToString(self, response):
+    def bodyToString(self, response, charset):
         bodyBytes = response.split(b'\r\n\r\n')[1] # Remove HTTP header from response.
         try:
+            bodyString = bodyBytes.decode(charset) # Decode response to UTF-8.
+            self.writeHTML(bodyString, "index.html")
+        except LookupError:
             bodyString = bodyBytes.decode('utf-8', errors='ignore') # Decode response to UTF-8.
             self.writeHTML(bodyString, "index.html")
-        except Exception as e:
-            print(f"Error decoding: {e}")
 
 
     """
