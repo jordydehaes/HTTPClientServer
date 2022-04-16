@@ -9,7 +9,7 @@ class HTTPServer:
         self.ip = ip # The server's IP addr.
         self.port = port # The server's port number.
         self.addr = (ip, port) # The server's addr.
-        self.s = self.createSocket() # Instantiate the socket and start listening for connections.
+        self.s = self.createSocket() # Instantiate the socket.
 
 
     def createSocket(self):
@@ -33,7 +33,7 @@ class HTTPServer:
         print(f"[NEW CONNECTION] {addr} connected.\r\n")
         while True:
             try:
-                request = conn.recv(1024)
+                request = conn.recv(2048)
             except:
                 print(f"[CONNECTION CLOSED] {addr} disconnected.")
                 print(f"[ACTIVE CONNECTIONS] {threading.activeCount() - 2}\r\n")
@@ -44,6 +44,7 @@ class HTTPServer:
 
     
     def handleRequest(self):
+        print("...")
 
-
-    def 
+    def test(self):
+        print("...")

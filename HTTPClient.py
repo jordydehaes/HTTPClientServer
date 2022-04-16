@@ -34,8 +34,8 @@ class HTTPClient:
         bytes = request.encode('utf-8') # Encode string to bytes.
         try:
             self.s.send(bytes) # Send the request to the server.
-        except error:
-            print(f"Error sending: {error}.")
+        except Exception as e:
+            print(f"Error sending: {e}")
 
             
     """
@@ -120,7 +120,8 @@ class HTTPClient:
         contentLength = sys.maxsize
         while True:
             data = self.s.recv(BUFFERSIZE)
-            totalLength += len(data)
+            totalLength += len(data)      
+            response += data
 
             if data.find(b"Content-Length:") != -1:
                 startPos = data.find(b"Content-Length") # Start position in byte stream where "Content-Length" is found.
@@ -129,12 +130,10 @@ class HTTPClient:
                 contentLength = findData[16:endPos].decode() # Gets the content length bytes and decodes it to discover the total content contentLength of HTTP request.
 
             if data.find(b"\r\n\r\n") != -1:
-                endOfLineCounter += 1
-
-            response += data
+                endOfLineCounter += 1 
 
             if endOfLineCounter >= 2 or totalLength >= int(contentLength): 
-                # If second EOL/CRLF (line break) is found, break. (chunked encoding ends with a CRLF)
+                # If second EOL/CRLF (line break) is found, break. (chunked encoding ends with a CRLF because of the terminating chunk with length zero)
                 # If total received bytes from buffer exceeds or equals (should exceed because of additional bytes fomre the header ietself) actual content length -> break (content-lentgh).
                 break
         return response
@@ -149,10 +148,15 @@ class HTTPClient:
     def findContentType(self, response):
         charset = ""
         if response.find(b"Content-Type:"):
-            startPos = response.find(b"charset=")
-            findData = response[startPos:]
-            endPos = findData.find(b"\r\n")
-            charset = findData[8:endPos].decode()
+            headerEnd = response.find(b"\r\n\r\n") 
+            range = response[:headerEnd]
+            if range.find(b"charset="):
+                startPos = range.find(b"charset=")
+                findData = response[startPos:]
+                endPos = findData.find(b"\r\n")
+                charset = findData[8:endPos].decode()
+            else:
+                charset = 'utf-8'
         return charset
 
 
@@ -177,7 +181,8 @@ class HTTPClient:
     @param response: The byte response from the HTTP request.
     """
     def bodyToString(self, response, charset):
-        bodyBytes = response.split(b'\r\n\r\n')[1] # Remove HTTP header from response.
+        endHeader = response.find(b'\r\n\r\n') # Remove HTTP header from response.
+        bodyBytes = response[endHeader+4:]
         try:
             bodyString = bodyBytes.decode(charset) # Decode response to UTF-8.
             self.writeHTML(bodyString, "index.html")
