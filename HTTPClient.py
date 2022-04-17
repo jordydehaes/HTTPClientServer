@@ -116,7 +116,7 @@ class HTTPClient:
         BUFFERSIZE = 4096
         response = b''
         totalLength = 0
-        endOfLineCounter = 0
+        CRLFCounter = 0
         contentLength = sys.maxsize
         while True:
             data = self.s.recv(BUFFERSIZE)
@@ -130,9 +130,9 @@ class HTTPClient:
                 contentLength = findData[16:endPos].decode() # Gets the content length bytes and decodes it to discover the total content contentLength of HTTP request.
 
             if data.find(b"\r\n\r\n") != -1:
-                endOfLineCounter += 1 
+                CRLFCounter += 1 
 
-            if endOfLineCounter >= 2 or totalLength >= int(contentLength): 
+            if CRLFCounter >= 2 or totalLength >= int(contentLength): 
                 # If second EOL/CRLF (line break) is found, break. (chunked encoding ends with a CRLF because of the terminating chunk with length zero)
                 # If total received bytes from buffer exceeds or equals (should exceed because of additional bytes fomre the header ietself) actual content length -> break (content-lentgh).
                 break
@@ -228,7 +228,7 @@ class HTTPClient:
     @param response: The response that contains the image.
     """
     def writeImage(self, imageName, response):
-        image = response.split(b'\r\n\r\n')[1]
+        image = response.split(b'\r\n\r\n')[1] # Gets the image data and makes sure the header is excluded.
         if imageName.startswith('/'):
          imageName = imageName[1:]
         if imageName.find('/'):
