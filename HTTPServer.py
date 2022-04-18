@@ -154,14 +154,17 @@ class HTTPServer:
         requestedResource = request[start + 1:end - 1].decode()
         endHead = request.find(b"\r\n\r\n")
         body = request[endHead + 4:]
+        endBody = body.find(b"\r\n\r\n")
+        finalBody = body[:endBody]
 
         with open("MyWebPage" + requestedResource, 'ab+') as f:
-            f.write(body)
+            f.write(finalBody)
+        with open("MyWebPage" + requestedResource, 'rb') as f:
             newContent = f.read()
         lengthWebPage = len(newContent)
         headers = f"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {lengthWebPage}\r\nDate: {self.getDateTime()}\r\n\r\n"
-        body = newContent
-        conn.send(headers.encode() + body)
+        finalBody = newContent
+        conn.send(headers.encode() + finalBody)
         self.checkConnenctionClose(request, conn)
 
 
@@ -175,8 +178,3 @@ class HTTPServer:
         dayName = now.strftime("%A")[0:3]
         format = f"{dayName}, %d %b %Y %H:%M:%S GMT"
         return now.strftime(format)
-
-
-
-#httpServer = HTTPServer("localhost", 8000)
-#print(httpServer.getDateTime())

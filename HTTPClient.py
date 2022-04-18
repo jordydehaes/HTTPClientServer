@@ -43,16 +43,18 @@ class HTTPClient:
 
     @param host: The host to send the request to.
     @param requestType: String to determine the request type.
+    @param filename: When calling PUT/POST, the name fo the file to make changes to or create.
+    @param body: When calling PUT/POST, the content of the file.
     """
-    def executeRequest(self, host, requestType, resource="", body=""):
+    def executeRequest(self, host, requestType, filename="", body=""):
         self.host = host.lower() # Set the host.
         requestType = requestType.upper()
         if requestType == 'GET': 
-            self.get(resource)
+            self.get(filename)
         elif requestType == 'POST':
-            self.post(resource, body)
+            self.post(filename, body)
         elif requestType == 'PUT':
-            self.put(resource, body)
+            self.put(filename, body)
         elif requestType == 'HEAD':
             self.head()
         else:
@@ -62,24 +64,24 @@ class HTTPClient:
     """
     Retrieves an HTML page from a certain webserver and stores the results locally.
 
-    @param resource: What specific resource to retrieve from the webserver, if nothing is provided, retrieves the root.
+    @param filename: What specific filename to retrieve from the webserver, if nothing is provided, retrieves the root.
     """
-    def get(self, resource=""):
-        request = f'GET /{resource} HTTP/1.1\r\nHost: {self.host}\r\n\r\n' # Construct request byte string.
-        print(f"[RETRIEVING] GET /{resource} HTTP/1.1")
+    def get(self, filename=""):
+        request = f'GET /{filename} HTTP/1.1\r\nHost: {self.host}\r\n\r\n' # Construct request byte string.
+        print(f"[RETRIEVING] GET /{filename} HTTP/1.1")
         self.encodeAndSend(request) # Send request to server.
         response = self.rvcChunks() # Read the server reply & store it in 'response'.
         contentType = self.findContentType(response)
         if contentType == b'text':
             charset = self.findCharset(response)
-            self.bodyToString(response, resource ,charset) # Pass the byte response to bodyToString
-            images = self.scrapeImages(resource)
+            self.removeHeaders(response, filename) # Pass the byte response to removeHeaders
+            images = self.scrapeImages(filename)
             if images:
                 print(f"[IMAGES FOUND] {images [0:2]}...")
                 self.getImages(images)
-            self.alterImageSrc(resource)
+            self.alterImageSrc(filename, charset)
         elif contentType == b'image':
-            self.writeImage(resource, response)
+            self.writeImage(filename, response)
     
 
     """
@@ -90,28 +92,37 @@ class HTTPClient:
         print(f"[RETRIEVING] HEAD / HTTP/1.1")
         self.encodeAndSend(request)
         response = self.s.recv(1024)
-        charset = self.findCharset(response)
         try:
-            decodedResponse = response.decode(charset)
-            self.writeFile(decodedResponse, "headers.txt")
-        except LookupError:
-            decodedResponse = response.decode('utf-8', errors='ignore')
-            self.writeFile(decodedResponse, "headers.txt")
+            self.writeFile(response, "headers.txt")
+        except:
+            print("Error witing headers.")
 
 
-    def post(self, resource, body):
+    """
+    Appends content to an existing file on the server.
+
+    @param filename: What specific filename to alter from the webserver.
+    @param body: The content to append to the file.
+    """
+    def post(self, filename, body):
         contenLength = len(body)
-        request = f'POST /{resource} HTTP/1.1\r\nHost: {self.host}\r\nContent-Length: {contenLength}\r\nConnection: close\r\n\r\n{body}\r\n\r\n'
-        print(f"[SENDING] POST /{resource} HTTP/1.1")
+        request = f'POST /{filename} HTTP/1.1\r\nHost: {self.host}\r\nContent-Length: {contenLength}\r\nConnection: close\r\n\r\n{body}\r\n\r\n'
+        print(f"[SENDING] POST /{filename} HTTP/1.1")
         self.encodeAndSend(request)
         response = self.s.recv(2048)
         print(f"[CREATED] {response.decode()}")
 
 
-    def put(self, resource, body):
+    """
+    Creates a new file on the server with the provided content..
+
+    @param filename: What specific filename to create on the webserver.
+    @param body: The content to write to the new file.
+    """
+    def put(self, filename, body):
         contenLength = len(body)
-        request = f'PUT /{resource} HTTP/1.1\r\nHost: {self.host}\r\nContent-Length: {contenLength}\r\nConnection: close\r\n\r\n{body}\r\n\r\n'
-        print(f"[SENDING] PUT /{resource} HTTP/1.1")
+        request = f'PUT /{filename} HTTP/1.1\r\nHost: {self.host}\r\nContent-Length: {contenLength}\r\nConnection: close\r\n\r\n{body}\r\n\r\n'
+        print(f"[SENDING] PUT /{filename} HTTP/1.1")
         self.encodeAndSend(request)
         response = self.s.recv(1024)
         print(f"[CREATED] {response.decode()}")
@@ -157,10 +168,10 @@ class HTTPClient:
     """
     def findCharset(self, response):
         charset = ""
-        if response.find(b"Content-Type:"):
+        if response.find(b"Content-Type:") != -1:
             headerEnd = response.find(b"\r\n\r\n") 
             range = response[:headerEnd]
-            if range.find(b"charset="):
+            if range.find(b"charset=") != -1:
                 startPos = range.find(b"charset=")
                 findData = response[startPos:]
                 endPos = findData.find(b"\r\n")
@@ -171,7 +182,7 @@ class HTTPClient:
 
 
     """
-    Looks for the content type in the response, more specifically in the HTTP header.
+    Looks for the content type in the response, more specifically in the Content-Type header.
 
     @param response: The encoded response from the server.
     @return: The Content-Type to classify the response.
@@ -193,7 +204,7 @@ class HTTPClient:
     """
     Creates the file that contains the requested content from a webpage. 
 
-    @param html: The HTML that will be stored in the file.
+    @param content: The content that will be stored in the file.
     @param filename: Name of the file where the requested content is located.
     """
     def writeFile(self, content, filename):
@@ -202,36 +213,34 @@ class HTTPClient:
         myDir = os.getcwd() + "/" + self.host
         if not os.path.exists(myDir):
             os.mkdir(myDir) # Create host folder.
-        with open(myDir + "/" + filename, "w") as f: # Write file.
+        with open(myDir + "/" + filename, "wb") as f: # Write file.
             f.write(content)
 
 
     """
-    Removes the HTTP header from the response and converts decodes the byte stream. 
+    Removes the HTTP headers from the response. 
 
     @param response: The byte response from the HTTP request.
+    @param filename: Determines the name of the file to write.
     """
-    def bodyToString(self, response, resource, charset):
+    def removeHeaders(self, response, filename):
         endHeader = response.find(b'\r\n\r\n') # Remove HTTP header from response.
         bodyBytes = response[endHeader+4:]
-        try:
-            bodyString = bodyBytes.decode(charset) # Decode response to UTF-8.
-            self.writeFile(bodyString, resource)
-        except LookupError:
-            bodyString = bodyBytes.decode('utf-8', errors='ignore') # Decode response to UTF-8.
-            self.writeFile(bodyString, resource)  
+        self.writeFile(bodyBytes, filename)
+        return
 
 
     """
     Looks for all embedded images in the HTML body. 
 
+    @param filename: Name of the resource.
     @return: A dictionary containing the src of all the images.
     """
-    def scrapeImages(self, resource):
-        if resource == "":
-            resource = "index.html"
+    def scrapeImages(self, filename):
+        if filename == "":
+            filename = "index.html"
         images = []
-        text_file = open(self.host + "/" + resource, "r")
+        text_file = open(self.host + "/" + filename, "rb")
         soup = bs.BeautifulSoup(text_file,'lxml')
         text_file.close()
         for image in soup.find_all('img'):
@@ -275,16 +284,21 @@ class HTTPClient:
 
     """
     Alters the src path from the images in the body so the stored webpage loads the images correctly.
+
+    @param filename: The filename to search for images and alter their sources.
+    @param charset: The encoding for the content of the webpage.
     """
-    def alterImageSrc(self, resource):
-        if resource == "":
-            resource = "index.html"
-        body = open(os.getcwd() + "/" + self.host + "/" + resource, "r")
+    def alterImageSrc(self, filename, charset):
+        if filename == "":
+            filename = "index.html"
+        body = open(os.getcwd() + "/" + self.host + "/" + filename, "rb")
         soup = bs.BeautifulSoup(body, 'lxml')
         images = soup.find_all("img")
         for image in images:
             src = image.get('src')
             if src[0] == '/':
                 image['src'] = src[1:]
-        with open(os.getcwd() + "/" + self.host + "/" + resource, "w") as f:
-             f.write(str(soup))
+        soupStr = str(soup.prettify())
+        soupBytes = soupStr.encode(charset)
+        with open(os.getcwd() + "/" + self.host + "/" + filename, "wb") as f:
+             f.write(soupBytes)
