@@ -14,4 +14,4 @@ elif httpCommand.lower() == "put" or httpCommand.lower() == "post":
     body = input("Body: ")
     client.executeRequest(URI, httpCommand, resource, body)
 else: 
-    client.executeRequest(URI, httpCommand, resource="", body="")
+    client.executeRequest(URI, httpCommand)
