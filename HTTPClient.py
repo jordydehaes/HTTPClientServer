@@ -49,7 +49,7 @@ class HTTPClient:
     def executeRequest(self, host, requestType, filename="", body=""):
         self.host = host.lower() # Set the host.
         requestType = requestType.upper()
-        if requestType == 'GET': 
+        if requestType == 'GET':
             self.get(filename)
         elif requestType == 'POST':
             self.post(filename, body)
@@ -67,7 +67,11 @@ class HTTPClient:
     @param filename: What specific filename to retrieve from the webserver, if nothing is provided, retrieves the root.
     """
     def get(self, filename=""):
-        request = f'GET /{filename} HTTP/1.1\r\nHost: {self.host}\r\n\r\n' # Construct request byte string.
+        modifiedSince = input("If-Modified-Since: ")
+        if modifiedSince == "":
+            request = f'GET /{filename} HTTP/1.1\r\nHost: {self.host}\r\n\r\n'
+        elif modifiedSince != "":
+            request = f'GET /{filename} HTTP/1.1\r\nHost: {self.host}\r\nIf-Modified-Since: {modifiedSince}\r\n\r\n'
         print(f"[RETRIEVING] GET /{filename} HTTP/1.1")
         self.encodeAndSend(request) # Send request to server.
         response = self.rvcChunks() # Read the server reply & store it in 'response'.
@@ -88,11 +92,16 @@ class HTTPClient:
     Retrieves the HEAD response from a certain webserver and stores the results locally.
     """
     def head(self):
-        request = f'HEAD / HTTP/1.1\r\nHost: {self.host}\r\nConnection: close\r\n\r\n'
+        modifiedSince = input("If-Modified-Since: ")
+        if modifiedSince == "":
+            request = f'HEAD / HTTP/1.1\r\nHost: {self.host}\r\nConnection: close\r\n\r\n'
+        elif modifiedSince != "":
+            request = f'HEAD / HTTP/1.1\r\nHost: {self.host}\r\nIf-Modified-Since: {modifiedSince}\r\nConnection: close\r\n\r\n'
         print(f"[RETRIEVING] HEAD / HTTP/1.1")
         self.encodeAndSend(request)
-        response = self.s.recv(1024)
+        response = self.s.recv(2048)
         try:
+            contentType = self.findContentType(response)
             self.writeFile(response, "headers.txt")
         except:
             print("Error witing headers.")

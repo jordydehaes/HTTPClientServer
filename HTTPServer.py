@@ -8,8 +8,13 @@ class HTTPServer:
         self.ip = ip # The server's IP addr.
         self.port = port # The server's port number.
         self.addr = (ip, port) # The server's addr.
-        self.images = ["/bombPlanted.jpg", "/cryingJordan.jpg", "/leoMemeFace.jpg"]
-        self.webPages = ["index.html", "page.html", "304.html", "400.html", "404.html", "500.html", "putFile.txt"]
+        self.images = [ "/bombPlanted.jpg", "/cryingJordan.jpg", "/leoMemeFace.jpg" ]
+        self.webPages = ["index.html", "page.html", "304.html", "400.html", "404.html", "500.html" ]
+        self.ifModSince = { "/index.html": "Mon, 18 Apr 2022 11:07:33 GMT",
+                            "/page.html": "Mon, 18 Apr 2022 11:07:33 GMT",
+                            "/bombPlanted.jpg": "Mon, 18 Apr 2022 11:07:33 GMT",
+                            "/leoMemeFace.jpg": "Mon, 18 Apr 2022 11:07:33 GMT",
+                            "/cryingJordan.jpg": "Mon, 18 Apr 2022 11:07:33 GMT" }
         self.s = self.createSocket() # Instantiate the socket.
 
 
@@ -83,6 +88,24 @@ class HTTPServer:
         end = request.find(b"HTTP/1.1")
         requestedResource = request[start + 1:end - 1]
 
+        ifModSince = request.find(b"If-Modified-Since:")
+        if ifModSince != -1:
+            data = request[ifModSince:]
+            end = data.find(b"\r\n")
+
+            stringRequestedResource = requestedResource.decode()
+            if stringRequestedResource in self.ifModSince:
+                dateRequest = data[19:end].decode()
+                dateServer = self.ifModSince[stringRequestedResource]
+
+                if not self.checkIfModSince(dateServer, dateRequest):
+                    self.sendStatusCode(conn, 304, 'Not Modified')
+                    self.checkConnenctionClose(request, conn)
+                    return
+            else:
+                self.sendStatusCode(conn, 404, 'Not Found')
+                return
+
         if requestedResource == b'/':
             filePath = 'MyWebPage/index.html'
             file = open(filePath, 'r')
@@ -125,6 +148,23 @@ class HTTPServer:
 
 
     def head(self, request, conn):
+        ifModSince = request.find(b"If-Modified-Since:")
+        if ifModSince != -1:
+            data = request[ifModSince:]
+            end = data.find(b"\r\n")
+
+            stringRequestedResource = "/index.html"
+            if stringRequestedResource in self.ifModSince:
+                dateRequest = data[19:end].decode()
+                dateServer = self.ifModSince[stringRequestedResource]
+
+                if not self.checkIfModSince(dateServer, dateRequest):
+                    self.sendStatusCode(conn, 304, 'Not Modified')
+                    self.checkConnenctionClose(request, conn)
+                    return
+            else:
+                self.sendStatusCode(conn, 404, 'Not Found')
+                return
         filePath = 'MyWebPage/index.html'
         file = open(filePath, 'r')
         webPage = file.read()
@@ -166,6 +206,22 @@ class HTTPServer:
         finalBody = newContent
         conn.send(headers.encode() + finalBody)
         self.checkConnenctionClose(request, conn)
+
+
+    def checkIfModSince(self, dateServer, dateRequest):
+        serverModified = dateServer.split()
+        dateRequest = dateRequest.split()
+        monthsDic = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6, "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10,
+                  "Nov": 11, "Dec": 12}
+        serverDateTimeMod = datetime(int(serverModified[3]), monthsDic[serverModified[2]], int(serverModified[1]))
+        requestDateTime = datetime(int(dateRequest[3]), monthsDic[dateRequest[2]], int(dateRequest[1]))
+        if requestDateTime < serverDateTimeMod:
+            return True
+        if requestDateTime > serverDateTimeMod:
+            return False
+        if dateRequest[4] < serverModified[4]:
+            return True
+        return False    
 
 
     def checkConnenctionClose(self, request, conn):
