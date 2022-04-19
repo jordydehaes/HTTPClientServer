@@ -100,11 +100,12 @@ class HTTPClient:
         print(f"[RETRIEVING] HEAD / HTTP/1.1")
         self.encodeAndSend(request)
         response = self.s.recv(2048)
-        try:
-            contentType = self.findContentType(response)
-            self.writeFile(response, "headers.txt")
-        except:
-            print("Error witing headers.")
+        start = response.find(b"HTTP/1.1") + 9
+        statusCode = response[start:start + 3].decode()
+        if statusCode == "200":
+            self.writeFile(response, "headers.html")
+        else:
+            self.removeHeaders(response, "headers.html")
 
 
     """
