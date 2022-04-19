@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 class HTTPServer:
 
     def __init__(self, ip, port):
-        self.ip = ip # The server's IP addr.
-        self.port = port # The server's port number.
-        self.addr = (ip, port) # The server's addr.
+        self.ip = ip # The server' IP addr.
+        self.port = port # The server' port number.
+        self.addr = (ip, port) # The server' addr.
         self.images = [ "/bombPlanted.jpg", "/cryingJordan.jpg", "/leoMemeFace.jpg" ]
         self.webPages = ["index.html", "page.html", "304.html", "400.html", "404.html", "500.html" ]
         self.ifModSince = { "/index.html": "Mon, 18 Apr 2022 11:07:33 GMT",
@@ -44,7 +44,7 @@ class HTTPServer:
 
 
     """
-    Handles a new client connected to the server bij receiving/handling its requests.
+    Handles a new client connected to the server by receiving/handling its requests.
 
     @param conn: The connection between client and server.
     @param addr: The address and port number from the client.
@@ -244,11 +244,12 @@ class HTTPServer:
         start = request.find(b" ")
         end = request.find(b"HTTP/1.1")
         requestedResource = request[start + 1:end - 1].decode()
-        endHead = request.find(b"\r\n\r\n")
-        body = request[endHead + 4:]
+        body = request.split(b"\r\n\r\n")[1]
+        endBody = body.find(b"\r\n\r\n")
+        finalBody = body[:endBody]
 
         with open("MyWebPage" + requestedResource, 'wb') as f:
-            f.write(body)
+            f.write(finalBody)
         headers = f"HTTP/1.1 201 CREATED\r\nContent-Location: {requestedResource}\r\n\r\n"
         conn.send(headers.encode())
         self.checkConnenctionClose(request, conn)
@@ -267,8 +268,7 @@ class HTTPServer:
         start = request.find(b" ")
         end = request.find(b"HTTP/1.1")
         requestedResource = request[start + 1:end - 1].decode()
-        endHead = request.find(b"\r\n\r\n")
-        body = request[endHead + 4:]
+        body = request.split(b"\r\n\r\n")[1]
         endBody = body.find(b"\r\n\r\n")
         finalBody = body[:endBody]
 
@@ -292,23 +292,22 @@ class HTTPServer:
     @return: Returns True or False based on the comparison of the two arguments.
     """
     def checkIfModSince(self, dateServer, dateRequest):
+        monthsDic = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6, "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
         serverModified = dateServer.split()
         dateRequest = dateRequest.split()
-        monthsDic = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6, "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10,
-                  "Nov": 11, "Dec": 12}
         serverDateTimeMod = datetime(int(serverModified[3]), monthsDic[serverModified[2]], int(serverModified[1]))
         requestDateTime = datetime(int(dateRequest[3]), monthsDic[dateRequest[2]], int(dateRequest[1]))
-        if requestDateTime < serverDateTimeMod:
-            return True
         if requestDateTime > serverDateTimeMod:
             return False
+        if requestDateTime < serverDateTimeMod:
+            return True
         if dateRequest[4] < serverModified[4]:
             return True
-        return False    
+        return False
 
 
     """
-    Checks if the request has a "Connection: close" header, if so it closes the connection with the client after responding.
+    Checks if the request has the "Connection: close" header, if so it closes the connection with the client after responding.
 
     @param request: The incoming request from a client.
     @param conn: The connection between client and server.
@@ -316,6 +315,8 @@ class HTTPServer:
     def checkConnenctionClose(self, request, conn):
         if request.find(b"Connection: close") != -1:
             conn.close()
+            print("[CONNECTION CLOSED] A client has disconnected.")
+            print(f"[ACTIVE CONNECTIONS] {threading.activeCount() - 2}")
 
 
     """
