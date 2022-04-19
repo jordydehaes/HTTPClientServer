@@ -18,6 +18,11 @@ class HTTPServer:
         self.s = self.createSocket() # Instantiate the socket.
 
 
+    """
+    Creates an IPv4, TCP socket and binds to an ip and port number.
+
+    @return: Returns the created socket.
+    """
     def createSocket(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Create an IPv4, TCP socket.
         s.bind(self.addr) # Associate the socket with a network interface and port number. Since we use IPv4, bind expected two values: port and host.
@@ -25,6 +30,9 @@ class HTTPServer:
         return s
 
 
+    """
+    Server starts listening for incoming connections, allocates a thread per new connection.
+    """
     def startServer(self):
         self.s.listen() # Enables the server to accept connections.
         print("[LISTENING] Server listening for incoming connections...")
@@ -35,6 +43,12 @@ class HTTPServer:
             print(f"[ACTIVE CONNECTIONS] {threading.activeCount() - 1}")
 
 
+    """
+    Handles a new client connected to the server bij receiving/handling its requests.
+
+    @param conn: The connection between client and server.
+    @param addr: The address and port number from the client.
+    """
     def handleClient(self, conn, addr):
         print(f"[CONNECTION OPENED] {addr} connected.")
         while True:
@@ -49,11 +63,24 @@ class HTTPServer:
                 self.handleRequest(request, requestHTTPMethod, conn)
 
 
+    """
+    Determines the HTTP method used from a request.
+
+    @param request: The incoming request from a client.
+    @return: Returns the HTTP method from the incoming request.
+    """
     def getHTTPMethod(self, request):
         httpMethod = request.split()[0]
         return httpMethod
 
 
+    """
+    Checks the HTTP method and handles the request accordingly..
+
+    @param request: The incoming request from a client.
+    @param htttpMethod: An HTTP method such as GET, HEAD, ...
+    @param conn: The connection between client and server.
+    """
     def handleRequest(self, request, httpMethod, conn):
         if self.validateRequest(request, conn):
             if httpMethod == "GET":
@@ -66,6 +93,13 @@ class HTTPServer:
                 self.put(request, conn)
 
 
+    """
+    Checks if the request is valid, if there is no host field return a 400.
+
+    @param request: The incoming request from a client.
+    @param conn: The connection between client and server.
+    @return: Returns True if the request is valid, false if it's not.
+    """
     def validateRequest(self, request, conn):
         if request.find(b"Host:") == -1:
             print("[INVALID REQUEST] Host header not found in headers.")
@@ -73,6 +107,14 @@ class HTTPServer:
             return False
         return True
 
+
+    """
+    Sends a response with a certain status code and the matching HTML body.
+
+    @param conn: The connection between client and server.
+    @param statusCode: The status code for the response.
+    @param status: The status of the status code.
+    """
     def sendStatusCode(self, conn, statusCode, status):
         filePath = f'MyWebPage/{statusCode}.html'
         file = open(filePath, 'r')
@@ -83,6 +125,14 @@ class HTTPServer:
         conn.send((headers + body).encode())
 
 
+    """
+    Handles get requests and returns the requested resource from the server.
+    Also checks the If-Modified-Since header, returns a 404 if the resource doesn't exist.
+    Checks if the connection needs to be closed after the response has been delivered.
+
+    @param request: The incoming request from a client.
+    @param conn: The connection between client and server.
+    """
     def get(self, request, conn):
         start = request.find(b" ")
         end = request.find(b"HTTP/1.1")
@@ -147,6 +197,14 @@ class HTTPServer:
         self.sendStatusCode(conn, 404, 'Not Found')
 
 
+    """
+    Handles head requests and returns the headers from a specific web page.
+    Also checks the If-Modified-Since header, returns a 404 if the resource doesn't exist.
+    Checks if the connection needs to be closed after the response has been delivered.
+
+    @param request: The incoming request from a client.
+    @param conn: The connection between client and server.
+    """
     def head(self, request, conn):
         ifModSince = request.find(b"If-Modified-Since:")
         if ifModSince != -1:
@@ -174,6 +232,14 @@ class HTTPServer:
         self.checkConnenctionClose(request, conn)
 
 
+    """
+    Handles put requests and returns a 201 if the new file has been created on the server.
+    If the file already has been created it overwrites its content.
+    Checks if the connection needs to be closed after the response has been delivered.
+
+    @param request: The incoming request from a client.
+    @param conn: The connection between client and server.
+    """
     def put(self, request, conn):
         start = request.find(b" ")
         end = request.find(b"HTTP/1.1")
@@ -188,6 +254,15 @@ class HTTPServer:
         self.checkConnenctionClose(request, conn)
 
 
+    """
+    Handles post requests and returns a 200 if the request succeeds.
+    If the file already has been created it the new content to the current content of the file.
+    If the file doesn't exist yet it will create it.
+    Checks if the connection needs to be closed after the response has been delivered.
+
+    @param request: The incoming request from a client.
+    @param conn: The connection between client and server.
+    """
     def post(self, request, conn):
         start = request.find(b" ")
         end = request.find(b"HTTP/1.1")
@@ -208,6 +283,14 @@ class HTTPServer:
         self.checkConnenctionClose(request, conn)
 
 
+    """
+    Compares the date from the If-Modified-Since header with the date on the server.
+    If the date on the server is more recent than the one from the request it will return True otherwise False.
+
+    @param dateServer: The last modifified date time from the specific resource on the webserver.
+    @param dateRequest: The date time included in the request to the server.
+    @return: Returns True or False based on the comparison of the two arguments.
+    """
     def checkIfModSince(self, dateServer, dateRequest):
         serverModified = dateServer.split()
         dateRequest = dateRequest.split()
@@ -224,11 +307,22 @@ class HTTPServer:
         return False    
 
 
+    """
+    Checks if the request has a "Connection: close" header, if so it closes the connection with the client after responding.
+
+    @param request: The incoming request from a client.
+    @param conn: The connection between client and server.
+    """
     def checkConnenctionClose(self, request, conn):
         if request.find(b"Connection: close") != -1:
             conn.close()
 
 
+    """
+    Formats the current date time into the required format for the "Date" header to send along with the response.
+
+    @return: Returns the current date time in the required format.
+    """
     def getDateTime(self):
         now = datetime.now(timezone.utc)
         dayName = now.strftime("%A")[0:3]
