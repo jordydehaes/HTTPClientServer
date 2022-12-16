@@ -146,25 +146,18 @@ class HTTPClient:
         BUFFERSIZE = 4096
         response = b''
         totalLength = 0
-        CRLFCounter = 0
         contentLength = sys.maxsize
         while True:
             data = self.s.recv(BUFFERSIZE)
-            totalLength += len(data)      
+            totalLength += len(data)
             response += data
 
-            if data.find(b"Content-Length:") != -1:
-                startPos = data.find(b"Content-Length") # Start position in byte stream where "Content-Length" is found.
-                findData = data[startPos:] # Returns the data from the start position in byte stream.
-                endPos = findData.find(b"\r\n") # Finds the first occurence of "\r\n" in the byte stream after content length and save its position.
-                contentLength = findData[16:endPos].decode() # Gets the content length bytes and decodes it to discover the total content contentLength of HTTP request.
+            if b"Content-Length:" in data:
+                startPos = data.index(b"Content-Length:") # Start position in byte stream where "Content-Length" is found.
+                endPos = data[startPos:].index(b"\r\n") # Returns the data from the start position in byte stream, finds the first occurence of "\r\n" in the byte stream after content length and save its position.
+                contentLength = data[startPos + 16:startPos + endPos].decode() # Gets the content length bytes and decodes it to discover the total content contentLength of HTTP request.
 
-            if data.find(b"\r\n\r\n") != -1:
-                CRLFCounter += 1 
-
-            if CRLFCounter >= 2 or totalLength >= int(contentLength): 
-                # If second EOL/CRLF (line break) is found, break. (chunked encoding ends with a CRLF because of the terminating chunk with length zero)
-                # If total received bytes from buffer exceeds or equals (should exceed because of additional bytes fomre the header ietself) actual content length -> break (content-lentgh).
+            if totalLength >= int(contentLength):
                 break
         return response
 
@@ -198,15 +191,10 @@ class HTTPClient:
     """
     def findContentType(self, response):
         type = ""
-        contentType = response.find(b"Content-Type:")
-        newData = response[contentType:]
-        start = newData.find(b" ")
-        end = newData.find(b"\r\n")
-        data = newData[start:end] 
-        if data.find(b"/"):
-            startPos = data.find(b" ")
-            endPos = data.find(b"/")
-            type = data[startPos + 1:endPos]
+        contentType = response.index(b"Content-Type:")
+        data = response[contentType:].split(b"\r\n")[0].split(b" ")[1]
+        if b"/" in data:
+            type = data.split(b"/")[0]
         return type
 
 
@@ -249,9 +237,8 @@ class HTTPClient:
         if filename == "":
             filename = "index.html"
         images = []
-        text_file = open(self.host + "/" + filename, "rb")
-        soup = bs.BeautifulSoup(text_file,'lxml')
-        text_file.close()
+        with open(self.host + "/" + filename, "rb") as text_file:
+            soup = bs.BeautifulSoup(text_file, 'lxml')
         for image in soup.find_all('img'):
             images.append(image.get('src'))
         return images
