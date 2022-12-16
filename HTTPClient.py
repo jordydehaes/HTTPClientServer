@@ -78,7 +78,7 @@ class HTTPClient:
         contentType = self.findContentType(response)
         if contentType == b'text':
             charset = self.findCharset(response)
-            self.removeHeaders(response, filename) # Pass the byte response to removeHeaders
+            self.removeHeadersAndWriteFile(response, filename) # Pass the byte response to removeHeadersAndWriteFile
             images = self.scrapeImages(filename)
             if images:
                 print(f"[IMAGES FOUND] {images [0:2]}...")
@@ -100,11 +100,12 @@ class HTTPClient:
         print(f"[RETRIEVING] HEAD / HTTP/1.1")
         self.encodeAndSend(request)
         response = self.s.recv(2048)
-        try:
-            contentType = self.findContentType(response)
-            self.writeFile(response, "headers.txt")
-        except:
-            print("Error witing headers.")
+        start = response.find(b"HTTP/1.1") + 9
+        statusCode = response[start:start + 3].decode()
+        if statusCode == "200":
+            self.writeFile(response, "headers.html")
+        else:
+            self.removeHeadersAndWriteFile(response, "headers.html")
 
 
     """
@@ -115,7 +116,7 @@ class HTTPClient:
     """
     def post(self, filename, body):
         contenLength = len(body)
-        request = f'POST /{filename} HTTP/1.1\r\nHost: {self.host}\r\nContent-Length: {contenLength}\r\nConnection: close\r\n\r\n{body}\r\n\r\n'
+        request = f'POST /{filename} HTTP/1.1\r\nHost: {self.host}\r\nContent-Length: {contenLength}\r\n\r\n{body}\r\n\r\n'
         print(f"[SENDING] POST /{filename} HTTP/1.1")
         self.encodeAndSend(request)
         response = self.s.recv(2048)
@@ -130,7 +131,7 @@ class HTTPClient:
     """
     def put(self, filename, body):
         contenLength = len(body)
-        request = f'PUT /{filename} HTTP/1.1\r\nHost: {self.host}\r\nContent-Length: {contenLength}\r\nConnection: close\r\n\r\n{body}\r\n\r\n'
+        request = f'PUT /{filename} HTTP/1.1\r\nHost: {self.host}\r\nContent-Length: {contenLength}\r\n\r\n{body}\r\n\r\n'
         print(f"[SENDING] PUT /{filename} HTTP/1.1")
         self.encodeAndSend(request)
         response = self.s.recv(1024)
@@ -220,10 +221,9 @@ class HTTPClient:
     @param response: The byte response from the HTTP request.
     @param filename: Determines the name of the file to write.
     """
-    def removeHeaders(self, response, filename):
-        endHeader = response.find(b'\r\n\r\n') # Remove HTTP header from response.
-        bodyBytes = response[endHeader+4:]
-        self.writeFile(bodyBytes, filename)
+    def removeHeadersAndWriteFile(self, response, filename):
+        body = response.split(b'\r\n\r\n')[1]
+        self.writeFile(body, filename)
         return
 
 
